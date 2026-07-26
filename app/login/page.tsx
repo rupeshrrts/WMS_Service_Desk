@@ -27,7 +27,7 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = React.useState(false);
   const [demoRole, setDemoRole] = React.useState<"customer" | "engineer">("customer");
 
-  // Pre-fill fields when user toggles demo role
+  // Pre-fill fields when user toggles demo role is 
   React.useEffect(() => {
     if (demoRole === "customer") {
       setEmail("m.aurelius@apexlogistics.com");

@@ -4,13 +4,21 @@
 // TICKET SERVICE — all database logic for tickets lives here.
 //
 // Functions:
-//   fetchAllTickets      → Get tickets (role-filtered)
+//   fetchAllTickets      → Get tickets (role-filtered, company-isolated)
 //   fetchTicketById      → Get one ticket
 //   createNewTicket      → Insert a new ticket + system comment
 //   changeTicketStatus   → Update status + log comment
 //   reassignTicket       → Assign/unassign engineer + log comment
 //   escalateToSenior     → Escalate ticket + log comments
 //   removeTicket         → Delete ticket permanently
+//
+// DATA ISOLATION RULES:
+//   wms_admin / wms_senior_engineer  → see ALL tickets
+//   wms_engineer                     → assigned to them OR unassigned
+//   client_admin                     → all tickets for their company (company_id)
+//   client_operator                  → all tickets for their company (company_id)
+//                                      (NOT just their own — all operators in the
+//                                       same company share the same view)
 // ============================================================
 
 import { supabase } from "../../config/supabase";
@@ -20,16 +28,13 @@ import { CONSTANTS } from "../../config/constants";
 import { generateTicketId, generateCommentId, formatStatusLabel } from "../../shared/utils/helpers";
 
 // ---- fetchAllTickets ----
-// Returns tickets filtered by the calling user's role:
-//   admin    → all tickets
-//   engineer → assigned to them OR unassigned
-//   customer → only their own tickets
-//
+// Returns tickets filtered by the calling user's role.
 // Supports optional filters: status, priority, category
 export const fetchAllTickets = async (
   userId: string,
   role: Role,
   companyName: string | null,
+  companyId: string | null,
   filters: { status?: string; priority?: string; category?: string }
 ): Promise<Ticket[]> => {
   let query = supabase
@@ -37,12 +42,18 @@ export const fetchAllTickets = async (
     .select("*")
     .order("created_at", { ascending: false }); // Newest first
 
-  // Role-based visibility
-  if (role === "client_operator") {
-    query = query.eq("created_by", userId);
-  } else if (role === "client_admin") {
-    if (!companyName) throw new AppError("Company name required for client admin.", 400);
-    query = query.eq("company_name", companyName);
+  // Role-based visibility — company isolation
+  if (role === "client_operator" || role === "client_admin") {
+    // Both client roles see ALL tickets for their company
+    // Operators are fully synced — they share the same view
+    if (companyId) {
+      query = query.eq("company_id", companyId);
+    } else if (companyName) {
+      // Fallback: use company_name if company_id not set yet
+      query = query.eq("company_name", companyName);
+    } else {
+      throw new AppError("Company information is required for this role.", 400);
+    }
   } else if (role === "wms_engineer") {
     // Engineer sees their tickets or unassigned ones
     query = query.or(`assigned_to.eq.${userId},assigned_to.is.null`);
@@ -62,12 +73,13 @@ export const fetchAllTickets = async (
 
 // ---- fetchTicketById ----
 // Returns a single ticket. Throws 404 if not found.
-// Throws 403 if a customer tries to view someone else's ticket.
+// Throws 403 if a client user tries to view a ticket from another company.
 export const fetchTicketById = async (
   ticketId: string,
   userId: string,
   role: Role,
-  companyName: string | null
+  companyName: string | null,
+  companyId: string | null
 ): Promise<Ticket> => {
   const { data, error } = await supabase
     .from("tickets")
@@ -77,11 +89,13 @@ export const fetchTicketById = async (
 
   if (error || !data) throw new AppError(`Ticket not found: ${ticketId}`, 404);
 
-  if (role === "client_operator" && data.created_by !== userId) {
-    throw new AppError("Access denied. You can only view your own tickets.", 403);
-  }
-  if (role === "client_admin" && data.company_name !== companyName) {
-    throw new AppError("Access denied. You can only view tickets from your company.", 403);
+  // Company-level isolation: client roles can only see their own company's tickets
+  if (role === "client_operator" || role === "client_admin") {
+    if (companyId && data.company_id && data.company_id !== companyId) {
+      throw new AppError("Access denied. You can only view tickets from your company.", 403);
+    } else if (!companyId && companyName && data.company_name !== companyName) {
+      throw new AppError("Access denied. You can only view tickets from your company.", 403);
+    }
   }
 
   return data as Ticket;
@@ -94,6 +108,7 @@ export const createNewTicket = async (
   userId: string,
   creatorName: string,
   companyName: string | null,
+  companyId: string | null,
   input: {
     title: string;
     description: string;
@@ -122,6 +137,7 @@ export const createNewTicket = async (
     priority,
     category,
     company_name: companyName,
+    company_id: companyId,
     created_by: userId,
     creator_name: creatorName,
     assigned_to: null,

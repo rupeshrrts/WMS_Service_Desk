@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash   TEXT,                           -- bcrypt hashed password (nullable for Google Auth)
   name            TEXT NOT NULL,                  -- Display name
   role            TEXT NOT NULL                   
-                  CHECK (role IN ('wms_admin', 'wms_senior_engineer', 'wms_engineer', 'client_admin', 'client_operator')),
+                  CHECK (role IN ('super_admin', 'wms_admin', 'wms_senior_engineer', 'wms_engineer', 'client_admin', 'client_operator')),
   company_name    TEXT,                           -- Client company or 'WMS Internal'
   phone           TEXT,                           -- Optional phone number
   google_id       TEXT UNIQUE,                    -- For Google OAuth
@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS comments (
   author_id   TEXT NOT NULL,                    
   author_name TEXT NOT NULL,                    
   author_role TEXT NOT NULL                     
-              CHECK (author_role IN ('wms_admin', 'wms_senior_engineer', 'wms_engineer', 'client_admin', 'client_operator', 'system')),
+              CHECK (author_role IN ('super_admin', 'wms_admin', 'wms_senior_engineer', 'wms_engineer', 'client_admin', 'client_operator', 'system')),
   content     TEXT NOT NULL,                    
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );

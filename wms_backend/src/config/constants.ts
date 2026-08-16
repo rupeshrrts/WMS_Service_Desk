@@ -32,5 +32,5 @@ export const CONSTANTS = {
   TICKET_STATUSES: ["open", "in_progress", "resolved"] as const,
   TICKET_PRIORITIES: ["low", "medium", "high", "critical"] as const,
   TICKET_CATEGORIES: ["pallet", "crane", "conveyor", "software", "other"] as const,
-  USER_ROLES: ["wms_admin", "wms_senior_engineer", "wms_engineer", "client_admin", "client_operator"] as const,
+  USER_ROLES: ["super_admin", "wms_admin", "wms_senior_engineer", "wms_engineer", "client_admin", "client_operator"] as const,
 } as const;

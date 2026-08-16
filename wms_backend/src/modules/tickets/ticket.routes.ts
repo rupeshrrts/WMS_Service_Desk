@@ -45,23 +45,23 @@ router.get("/", protect, getAllTickets);
 router.get("/:id", protect, getTicketById);
 
 // POST /api/tickets
-router.post("/", protect, authorize("client_operator", "client_admin", "wms_admin"), createTicket);
+router.post("/", protect, authorize("super_admin", "client_operator", "client_admin", "wms_admin"), createTicket);
 
 // DELETE /api/tickets/:id
-router.delete("/:id", protect, authorize("wms_admin"), deleteTicket);
+router.delete("/:id", protect, authorize("super_admin", "wms_admin"), deleteTicket);
 
 // -------------------------------------------------------
 // TICKET ACTIONS
 // -------------------------------------------------------
 
 // PATCH /api/tickets/:id/status
-router.patch("/:id/status", protect, authorize("wms_engineer", "wms_senior_engineer", "wms_admin", "client_operator", "client_admin"), updateTicketStatus);
+router.patch("/:id/status", protect, authorize("super_admin", "wms_engineer", "wms_senior_engineer", "wms_admin", "client_operator", "client_admin"), updateTicketStatus);
 
 // PATCH /api/tickets/:id/assign
-router.patch("/:id/assign", protect, authorize("wms_admin", "wms_senior_engineer"), assignTicket);
+router.patch("/:id/assign", protect, authorize("super_admin", "wms_admin", "wms_senior_engineer"), assignTicket);
 
 // PATCH /api/tickets/:id/escalate
-router.patch("/:id/escalate", protect, authorize("wms_engineer", "wms_admin"), escalateTicket);
+router.patch("/:id/escalate", protect, authorize("super_admin", "wms_engineer", "wms_admin"), escalateTicket);
 
 // -------------------------------------------------------
 // ATTACHMENTS
@@ -74,7 +74,7 @@ router.get("/:id/attachments", protect, getAttachments);
 router.post(
   "/:id/attachments",
   protect,
-  authorize("client_operator", "client_admin", "wms_admin", "wms_engineer", "wms_senior_engineer"),
+  authorize("super_admin", "client_operator", "client_admin", "wms_admin", "wms_engineer", "wms_senior_engineer"),
   upload.single("file"),
   uploadAttachment
 );

@@ -1,14 +1,15 @@
 // ============================================================
 // src/shared/middleware/auth.ts
 // ============================================================
-// Security middleware — verifies Supabase Auth tokens.
+// Security middleware — verifies JWT or Supabase Auth tokens.
 //
 // How it works:
 //   1. Read Bearer token from Authorization header
-//   2. Ask Supabase to verify the token (supabase.auth.getUser)
-//   3. Look up the user in our custom `users` table by email
-//   4. If first-time login, auto-create the user (role=client_operator)
-//   5. Attach user info to req.user for downstream handlers
+//   2. Try to verify as a local JWT (for demo users)
+//   3. Fallback: ask Supabase to verify the token
+//   4. Look up the user in our custom `users` table by email
+//   5. Check is_active — block disabled accounts (401)
+//   6. Attach user info to req.user for downstream handlers
 // ============================================================
 
 import { Request, Response, NextFunction } from "express";
@@ -45,6 +46,33 @@ export const protect = async (
     // First try to verify as a local JWT token (for demo users)
     try {
       const decoded = jwt.verify(token, env.JWT_SECRET) as JwtPayload;
+
+      // Verify user is still active AND their company is not suspended
+      const { data: dbUser } = await supabase
+        .from("users")
+        .select("id, is_active, company_id")
+        .eq("id", decoded.userId)
+        .maybeSingle();
+
+      if (dbUser && dbUser.is_active === false) {
+        res.status(401).json(fail("Your account has been disabled. Please contact your company administrator."));
+        return;
+      }
+
+      // Check if the company itself is suspended (blocks ALL users in that company)
+      if (dbUser?.company_id) {
+        const { data: company } = await supabase
+          .from("companies")
+          .select("is_active, name")
+          .eq("id", dbUser.company_id)
+          .maybeSingle();
+
+        if (company && company.is_active === false) {
+          res.status(401).json(fail(`Access suspended. "${company.name}" has been deactivated by WMS. Please contact WMS support.`));
+          return;
+        }
+      }
+
       req.user = decoded;
       return next();
     } catch (jwtError) {
@@ -62,7 +90,7 @@ export const protect = async (
     // 2. Look up user in our custom `users` table by email
     let { data: dbUser } = await supabase
       .from("users")
-      .select("id, email, name, role, company_name, phone, profile_picture, provider, email_verified")
+      .select("id, email, name, role, company_name, company_id, is_active, phone, profile_picture, provider, email_verified")
       .eq("email", authUser.email!)
       .maybeSingle();
 
@@ -76,12 +104,14 @@ export const protect = async (
                 authUser.email!.split("@")[0],
           role: "client_operator",         // Default role — admin can change later
           company_name: null,
+          company_id: null,
+          is_active: true,
           provider: "supabase",
           email_verified: true,
           updated_at: new Date().toISOString(),
           created_at: new Date().toISOString(),
         })
-        .select("id, email, name, role, company_name, phone, profile_picture, provider, email_verified")
+        .select("id, email, name, role, company_name, company_id, is_active, phone, profile_picture, provider, email_verified")
         .single();
 
       dbUser = newUser;
@@ -92,12 +122,33 @@ export const protect = async (
       return;
     }
 
-    // 4. Attach user to request
+    // 4. Check if account is active
+    if (dbUser.is_active === false) {
+      res.status(401).json(fail("Your account has been disabled. Please contact your company administrator."));
+      return;
+    }
+
+    // Check if user's company has been deactivated/suspended
+    if (dbUser.company_id) {
+      const { data: company } = await supabase
+        .from("companies")
+        .select("is_active, name")
+        .eq("id", dbUser.company_id)
+        .maybeSingle();
+
+      if (company && company.is_active === false) {
+        res.status(401).json(fail(`Access suspended. "${company.name}" has been deactivated by WMS. Please contact WMS support.`));
+        return;
+      }
+    }
+
+    // 5. Attach user to request
     req.user = {
       userId: dbUser.id,
       email: dbUser.email,
       role: dbUser.role as Role,
       company_name: dbUser.company_name,
+      company_id: dbUser.company_id,
     };
 
     next();

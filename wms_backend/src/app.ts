@@ -30,9 +30,10 @@ import { env } from "./config/env";
 import { CONSTANTS } from "./config/constants";
 
 // Import all route modules
-import authRoutes from "./modules/auth/auth.routes";
-import ticketRoutes from "./modules/tickets/ticket.routes";
-import userRoutes from "./modules/users/user.routes";
+import authRoutes    from "./modules/auth/auth.routes";
+import ticketRoutes  from "./modules/tickets/ticket.routes";
+import userRoutes    from "./modules/users/user.routes";
+import companyRoutes from "./modules/companies/company.routes";
 
 // Import error handling middleware
 import { errorHandler, notFound } from "./shared/middleware/errorHandler";
@@ -107,9 +108,10 @@ app.get("/health", (_req, res) => {
 //    /api/tickets/*  → all ticket operations
 //    /api/users/*    → user management
 // ============================================================
-app.use("/api/auth", authRoutes);
-app.use("/api/tickets", ticketRoutes);
-app.use("/api/users", userRoutes);
+app.use("/api/auth",      authRoutes);
+app.use("/api/tickets",   ticketRoutes);
+app.use("/api/users",     userRoutes);
+app.use("/api/companies", companyRoutes);
 
 // ============================================================
 // 8. ERROR HANDLING — must come LAST after all routes

@@ -16,12 +16,22 @@ import { CONSTANTS } from "../../config/constants";
 // ---- Derive types from constants so they always stay in sync ----
 // If you add "critical2" to CONSTANTS.TICKET_PRIORITIES,
 // the TicketPriority type automatically includes it too.
-export type Role           = (typeof CONSTANTS.USER_ROLES)[number];       // "wms_admin" | "wms_senior_engineer" | "wms_engineer" | "client_admin" | "client_operator"
+export type Role           = (typeof CONSTANTS.USER_ROLES)[number];       // "super_admin" | "wms_admin" | "wms_senior_engineer" | "wms_engineer" | "client_admin" | "client_operator"
 export type TicketStatus   = (typeof CONSTANTS.TICKET_STATUSES)[number];  // "open" | "in_progress" | "resolved"
 export type TicketPriority = (typeof CONSTANTS.TICKET_PRIORITIES)[number];// "low" | "medium" | "high" | "critical"
 export type TicketCategory = (typeof CONSTANTS.TICKET_CATEGORIES)[number];// "pallet" | "crane" | ...
 
 export type AuthProvider = "local" | "google";
+
+// ---- Company ----
+// A client organisation that has one admin and multiple operators.
+export interface Company {
+  id: string;           // e.g. "comp-1"
+  name: string;         // e.g. "Acme Corp"
+  is_active: boolean;   // WMS admin can suspend an entire company
+  created_at?: string;
+  updated_at?: string;
+}
 
 // ---- User ----
 // A person who has an account in the WMS system.
@@ -32,6 +42,8 @@ export interface User {
   name: string;         // Display name shown in UI
   role: Role;           // What they're allowed to do
   company_name: string | null;
+  company_id: string | null;    // FK to companies table
+  is_active: boolean;           // false = account disabled (operator left company etc.)
   phone?: string;       // Optional contact number
   google_id?: string;           // Google sub claim (for OAuth users)
   profile_picture?: string;     // Avatar URL from Google
@@ -59,6 +71,7 @@ export interface Ticket {
   priority: TicketPriority;     // How urgent it is
   category: TicketCategory;     // What kind of equipment/system
   company_name: string | null;   // The company this ticket belongs to
+  company_id: string | null;    // FK to companies table
   created_by: string;           // User ID of reporter
   creator_name: string;         // Cached display name
   assigned_to: string | null;   // Engineer user ID (null = unassigned)
@@ -88,6 +101,7 @@ export interface JwtPayload {
   email: string;
   role: Role;
   company_name: string | null;
+  company_id: string | null;    // Added for company-scoped queries
 }
 
 // ---- API Response ----

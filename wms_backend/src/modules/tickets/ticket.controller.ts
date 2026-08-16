@@ -31,9 +31,16 @@ import { TicketStatus, TicketPriority, TicketCategory } from "../../shared/types
 export const getAllTickets = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { userId, role, company_name } = req.user!;
+    let { company_id } = req.user!;
     const { status, priority, category } = req.query;
 
-    const tickets = await fetchAllTickets(userId, role, company_name, {
+    // Fallback: look up company_id from DB if missing from old JWT token
+    if (!company_id && (role === "client_admin" || role === "client_operator")) {
+      const { data: dbUser } = await supabase.from("users").select("company_id").eq("id", userId).maybeSingle();
+      company_id = dbUser?.company_id || null;
+    }
+
+    const tickets = await fetchAllTickets(userId, role, company_name, company_id, {
       status: status as string | undefined,
       priority: priority as string | undefined,
       category: category as string | undefined,
@@ -46,7 +53,7 @@ export const getAllTickets = async (req: Request, res: Response, next: NextFunct
 // ---- GET /api/tickets/:id ----
 export const getTicketById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const ticket = await fetchTicketById(req.params.id, req.user!.userId, req.user!.role, req.user!.company_name);
+    const ticket = await fetchTicketById(req.params.id, req.user!.userId, req.user!.role, req.user!.company_name, req.user!.company_id);
     res.status(200).json(ok({ ticket }));
   } catch (err) { next(err); }
 };
@@ -61,16 +68,20 @@ export const createTicket = async (req: Request, res: Response, next: NextFuncti
       throw new AppError("title, description, priority, and category are all required.", 400);
     }
 
-    // Fetch the creator's display name from the database
+    // Fetch creator info + company_id in one go (also resolves old token missing company_id)
     const { data: creator } = await supabase
       .from("users")
-      .select("name")
+      .select("name, company_id, company_name")
       .eq("id", req.user!.userId)
       .single();
 
     if (!creator) throw new AppError("Could not find your user account.", 500);
 
-    const ticket = await createNewTicket(req.user!.userId, creator.name, req.user!.company_name, {
+    // Use DB values as source of truth (more reliable than JWT for company info)
+    const resolvedCompanyId   = creator.company_id   || req.user!.company_id   || null;
+    const resolvedCompanyName = creator.company_name || req.user!.company_name || null;
+
+    const ticket = await createNewTicket(req.user!.userId, creator.name, resolvedCompanyName, resolvedCompanyId, {
       title,
       description,
       priority: priority as TicketPriority,
